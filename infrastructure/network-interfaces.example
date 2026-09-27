@@ -1,0 +1,34 @@
+# Sanitised portfolio example.
+# Replace placeholders only on the actual host.
+#
+# This file is documentation/configuration reference material.
+# It is NOT intended to be copied unchanged into a live system.
+
+auto lo
+iface lo inet loopback
+
+iface <LAN_INTERFACE> inet static
+        address <LAN_HOST_IP>/<LAN_PREFIX>
+        gateway <LAN_GATEWAY>
+
+auto vmbr0
+iface vmbr0 inet static
+        address <PRIVATE_GATEWAY_IP>/<PRIVATE_PREFIX>
+        bridge-ports none
+        bridge-stp off
+        bridge-fd 0
+
+        # Enable IPv4 forwarding.
+        post-up echo 1 > /proc/sys/net/ipv4/ip_forward
+
+        # Private service-network egress.
+        post-up iptables -t nat -A POSTROUTING -s '<PRIVATE_SERVICE_CIDR>' -o <LAN_INTERFACE> -j MASQUERADE
+        post-down iptables -t nat -D POSTROUTING -s '<PRIVATE_SERVICE_CIDR>' -o <LAN_INTERFACE> -j MASQUERADE
+
+        # Example DNAT rules.
+        post-up iptables -t nat -A PREROUTING -i <LAN_INTERFACE> -p tcp --dport 80 -j DNAT --to-destination <REVERSE_PROXY_IP>:80
+        post-up iptables -t nat -A PREROUTING -i <LAN_INTERFACE> -p tcp --dport 81 -j DNAT --to-destination <REVERSE_PROXY_IP>:81
+        post-up iptables -t nat -A PREROUTING -i <LAN_INTERFACE> -p tcp --dport <EXTERNAL_TLS_PORT> -j DNAT --to-destination <REVERSE_PROXY_IP>:443
+
+        # Hardened deployments should prefer explicit source/destination
+        # restrictions plus ESTABLISHED,RELATED state matching.

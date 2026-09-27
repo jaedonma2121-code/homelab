@@ -1,0 +1,30 @@
+[global]
+   workgroup = WORKGROUP
+   server string = Home Lab Storage Node
+   netbios name = <SAMBA_HOSTNAME>
+
+   security = user
+   map to guest = Bad User
+   passdb backend = tdbsam
+
+   log file = /var/log/samba/log.%m
+   max log size = 1000
+   logging = file
+
+   vfs objects = acl_xattr
+   map acl inherit = yes
+   store dos attributes = yes
+   ea support = yes
+   aio read size = 16384
+   aio write size = 16384
+
+[PrivateShare]
+   comment = Private Lab Storage
+   path = <STORAGE_PATH>
+   browseable = yes
+   writable = yes
+   guest ok = no
+   valid users = @<SAMBA_GROUP>
+   create mask = 0770
+   directory mask = 0770
+   force group = <SAMBA_GROUP>

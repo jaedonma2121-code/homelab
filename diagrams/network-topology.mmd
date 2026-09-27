@@ -1,0 +1,17 @@
+flowchart TB
+    C[LAN Clients]
+    H[Proxmox Host\nLAN interface]
+    B[Private Linux Bridge\nService Network]
+    S[Samba\nTCP 139/445]
+    F[Filebrowser\nHTTP 8080]
+    N[Nginx Proxy Manager\nHTTP 80 / Admin 81 / HTTPS 443]
+
+    C --> H
+    H --> B
+    B --> S
+    B --> F
+    B --> N
+    N --> F
+
+    classDef boundary stroke-width:2px;
+    class H,N boundary;

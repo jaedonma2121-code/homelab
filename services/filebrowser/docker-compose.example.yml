@@ -1,0 +1,24 @@
+services:
+  filebrowser:
+    image: filebrowser/filebrowser:<PINNED_VERSION>
+    container_name: filebrowser
+    user: "<SERVICE_UID>:<SERVICE_GID>"
+    ports:
+      - "<HOST_PORT>:80"
+    environment:
+      PUID: "<SERVICE_UID>"
+      PGID: "<SERVICE_GID>"
+      TZ: "<TIMEZONE>"
+    volumes:
+      - <STORAGE_PATH>:/srv
+      - ./config/filebrowser.json:/config/settings.json:ro
+      - ./database/filebrowser.db:/database/filebrowser.db
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+# Do not commit the runtime database or credentials.
+# Pin production image versions instead of using :latest.

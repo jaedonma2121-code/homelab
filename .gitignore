@@ -1,0 +1,44 @@
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+secrets.yaml
+secrets.yml
+/secrets/
+
+# Private cryptographic material
+*.key
+*.pem
+*.crt
+*.csr
+*.pfx
+*.p12
+
+# Application state / databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+database/
+data/
+runtime/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS / editor noise
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.vscode/
+.idea/
+
+# Infrastructure state
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
