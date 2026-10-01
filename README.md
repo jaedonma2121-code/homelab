@@ -1,224 +1,186 @@
 # Home Lab Infrastructure
 
-> **Infrastructure-as-Code / Networking / Reverse Proxy / Linux Administration / Cybersecurity**
+> Proxmox VE / Linux Networking / Reverse Proxy / TLS / Storage / Infrastructure Troubleshooting
 
-A production-inspired home lab built around **Proxmox VE**, Linux networking, Layer-3 subnet separation, `iptables` NAT, and **Nginx Proxy Manager**.
+A security-conscious home lab demonstrating practical infrastructure engineering with Proxmox VE, Linux routing and NAT, isolated service networking, Nginx, File Browser Quantum, Samba-compatible storage, private PKI, and systemd-managed services.
 
-The environment separates a LAN-facing network from an isolated private service network, while exposing only explicitly mapped services through controlled host-level forwarding and reverse-proxy entry points.
+This repository is intentionally sanitised for public viewing. It documents architecture, engineering decisions, troubleshooting methodology, and operational patterns without publishing live IP addresses, hostnames, usernames, filesystem identifiers, certificate material, or port mappings from the real environment.
+
+## Security-first documentation policy
+
+Never commit real LAN or private-subnet addresses, real DNS names, public IPs, MAC addresses, Wi-Fi credentials, passwords, tokens, private keys, live certificates, physical disk identifiers, exact DNAT/port mappings, raw production configuration, databases, backups, or unredacted logs.
+
+Examples use symbolic values such as <LAN_SUBNET>, <SERVICE_SUBNET>, <HOST_ADDRESS>, and <SERVICE_ADDRESS>.
 
 ## Architecture Overview
 
-```
-                              ┌─────────────────────────┐
-                              │       LAN / Client Network       │
-                              │      <LAN_CIDR>     │
-                              └────────────┬────────────┘
-                                           │
-                                  <LAN_HOST_IP>/24
-                                           │
-                              ┌────────────▼────────────┐
-                              │       Proxmox Host       │
-                              │                          │
-                              │  <LAN_INTERFACE>                  │
-                              │  <LAN_HOST_IP>/24       │
-                              │                          │
-                              │  ┌────────────────────┐  │
-                              │  │ iptables           │  │
-                              │  │ NAT / DNAT /       │  │
-                              │  │ Forwarding         │  │
-                              │  └─────────┬──────────┘  │
-                              │            │             │
-                              │  vmbr0     │             │
-                              │ <PRIVATE_GATEWAY_IP>/24            │
-                              └────────────┬─────────────┘
-                                           │
-                    ───────────────────────┼──────────────────────
-                                           │
-                              Private Service Network
-                                   <PRIVATE_SERVICE_CIDR>
-                                           │
-               ┌───────────────────────────┼────────────────────────┐
-               │                           │                        │
-       ┌───────▼────────┐         ┌────────▼────────┐      ┌────────▼────────┐
-       │ Samba Storage  │         │  Filebrowser    │      │ Nginx Proxy     │
-       │ <SAMBA_IP>   │         │ <FILEBROWSER_IP>    │      │ Manager         │
-       │ TCP 139, 445   │         │ TCP 8080        │      │ <REVERSE_PROXY_IP>    │
-       └────────────────┘         └─────────────────┘      │ 80 / 81 / 443   │
-                                                           └─────────────────┘
-```
+~~~text
+Home LAN
+   |
+   | HTTPS
+   v
+Proxmox VE
+   |
+   | private service network
+   +----> Nginx reverse proxy
+   |           |
+   |           +----> File Browser Quantum
+   |
+   +----> storage services
+              |
+              +----> host-mounted data
+~~~
 
-## Technical Summary
+The architecture separates upstream connectivity, host-level routing/NAT, private services, application ingress, and persistent storage.
 
-| Component | Address | Role | Exposed Ports |
-|---|---|---|---|
-| Proxmox Host / Wi-Fi | `<LAN_HOST_IP>` | LAN gateway / NAT / forwarding | 80, 81, 139, 445, 9443 |
-| Proxmox `vmbr0` | `<PRIVATE_GATEWAY_IP>` | Private service-network gateway | — |
-| Samba | `<SAMBA_IP>` | Network storage | TCP 139, 445 |
-| Filebrowser | `<FILEBROWSER_IP>` | Web file management | TCP 8080 |
-| Nginx Proxy Manager | `<REVERSE_PROXY_IP>` | Reverse proxy / TLS termination | TCP 80, 81, 443 |
+## Core Components
 
-## Network Address Allocation
+| Component | Responsibility |
+|---|---|
+| Proxmox VE | Hypervisor and Layer-3 network boundary |
+| Linux bridge | Private service-network connectivity |
+| iptables | NAT, DNAT, and packet forwarding |
+| Nginx | HTTP reverse proxy and TLS termination |
+| File Browser Quantum | Web-based file management |
+| Samba | Network file-sharing interface |
+| systemd | Persistent service management |
+| Private CA | Trusted internal TLS for lab services |
+| Host-mounted storage | Shared data volume presented to services |
 
-| Network | CIDR | Purpose |
-|---|---|---|
-| LAN | `<LAN_CIDR>` | Upstream Wi-Fi/LAN |
-| Private | `<PRIVATE_SERVICE_CIDR>` | Internal services |
+## Network Design
 
-| Interface | Address | Function |
-|---|---|---|
-| `<LAN_INTERFACE>` | `<LAN_HOST_IP>/24` | LAN-facing interface |
-| `vmbr0` | `<PRIVATE_GATEWAY_IP>/24` | Private service bridge |
+The lab uses two logical network zones.
 
-## Port Allocation
+LAN-facing network: <LAN_SUBNET>
 
-| Public Endpoint | Protocol | Destination | Service |
-|---|---|---|---|
-| `<LAN_HOST_IP>:80` | TCP | `<REVERSE_PROXY_IP>:80` | Nginx HTTP |
-| `<LAN_HOST_IP>:81` | TCP | `<REVERSE_PROXY_IP>:81` | Nginx Proxy Manager Admin |
-| `<LAN_HOST_IP>:9443` | TCP | `<REVERSE_PROXY_IP>:443` | HTTPS / Filebrowser entry |
-| `<LAN_HOST_IP>:139` | TCP | `<SAMBA_IP>:139` | Samba |
-| `<LAN_HOST_IP>:445` | TCP | `<SAMBA_IP>:445` | Samba |
+Private service network: <SERVICE_SUBNET>
 
-## Core Routing Model
+The real values are intentionally omitted.
 
-The Proxmox host is the Layer-3 boundary between the LAN and private service network.
+## Routing and NAT
 
-IPv4 forwarding is enabled with:
+The Proxmox host provides the routing boundary between the upstream LAN and private service network.
 
-```bash
-echo 1 > /proc/sys/net/ipv4/ip_forward
-```
+Conceptually:
 
-Private-network egress is masqueraded through `<LAN_INTERFACE>`:
+~~~text
+LAN client
+   |
+   v
+Proxmox routing stack
+   |
+   +--> selective DNAT --> reverse proxy
+   |
+   +--> selective DNAT --> approved service
+   |
+   +--> private-network egress --> upstream NAT
+~~~
 
-```bash
-iptables -t nat -A POSTROUTING -s '<PRIVATE_SERVICE_CIDR>' -o <LAN_INTERFACE> -j MASQUERADE
-```
+The live DNAT rules are deliberately not committed.
 
-Inbound service traffic is selectively DNATed to internal destinations.
+## Nginx Reverse Proxy and TLS
 
-## Reverse Proxy / TLS
+Web applications are exposed through Nginx rather than publishing every application port directly.
 
-The Filebrowser public entry point is:
-
-```
-https://<LAN_HOST_IP>:9443
-```
-
-Traffic follows:
-
-```
+~~~text
 Client
-  │ HTTPS :9443
-  ▼
-<LAN_HOST_IP>
-  │ DNAT
-  ▼
-<REVERSE_PROXY_IP>:443
-  │ TLS termination
-  ▼
-Nginx Proxy Manager
-  │ HTTP reverse proxy
-  ▼
-<FILEBROWSER_IP>:8080
-  │
-  ▼
-Filebrowser
-```
+  |
+  | HTTPS
+  v
+Nginx
+  |
+  | TLS termination
+  | HTTP reverse proxy
+  v
+Internal application
+~~~
 
-Filebrowser remains HTTP-only internally while TLS is terminated at the reverse-proxy boundary.
+The lab uses a private Certificate Authority for internal HTTPS. The CA private key must never be stored in this repository or distributed to clients.
 
-The SSL certificate uses an IP Subject Alternative Name (IP-SAN) for the lab's LAN-facing endpoint.
+## File Browser Quantum
 
-> **Warning:** The certificate is self-signed and is appropriate for controlled lab infrastructure, not a publicly trusted production service.
+File Browser Quantum is deployed as an isolated service on the private service network. It runs as a systemd-managed service, uses an internal HTTP listener, is reached through Nginx for HTTPS access, and uses the existing host-mounted data volume.
 
-## Host Routing Configuration
+~~~text
+Client
+  |
+  | HTTPS
+  v
+Nginx
+  |
+  | HTTP
+  v
+File Browser Quantum
+  |
+  v
+LXC storage mount
+  |
+  v
+Host-mounted data volume
+~~~
 
-The relevant `/etc/network/interfaces` rules are:
+The real mount path, device name, container identifier, application address, and application port are intentionally omitted.
 
-```
-Post-up   echo 1 > /proc/sys/net/ipv4/ip_forward
-Post-up   iptables -t nat -A POSTROUTING -s '<PRIVATE_SERVICE_CIDR>' -o <LAN_INTERFACE> -j MASQUERADE
-Post-up   iptables -t nat -A PREROUTING -i <LAN_INTERFACE> -p tcp --dport 139 -j DNAT --to-destination <SAMBA_IP>:139
-Post-up   iptables -t nat -A PREROUTING -i <LAN_INTERFACE> -p tcp --dport 445 -j DNAT --to-destination <SAMBA_IP>:445
-Post-up   iptables -t nat -A PREROUTING -i <LAN_INTERFACE> -p tcp --dport 80 -j DNAT --to-destination <REVERSE_PROXY_IP>:80
-Post-up   iptables -t nat -A PREROUTING -i <LAN_INTERFACE> -p tcp --dport 81 -j DNAT --to-destination <REVERSE_PROXY_IP>:81
-Post-up   iptables -t nat -A PREROUTING -i <LAN_INTERFACE> -p tcp --dport 9443 -j DNAT --to-destination <REVERSE_PROXY_IP>:443
-Post-up   iptables -A FORWARD -p tcp --dport 80 -j ACCEPT
-Post-up   iptables -A FORWARD -p tcp --dport 81 -j ACCEPT
-Post-up   iptables -A FORWARD -p tcp --dport 443 -j ACCEPT
-```
+### Storage design
+
+The physical data volume is mounted and managed by the Proxmox host. Services receive the host-mounted directory through an LXC mount point.
+
+~~~text
+Physical data volume
+        |
+        v
+Proxmox host filesystem mount
+        |
+        | LXC mount point
+        v
+Service container
+        |
+        v
+File Browser / Samba
+~~~
+
+If multiple services access the same filesystem, they should use the correctly mounted filesystem path rather than independently mounting the physical device.
+
+## Service Management
+
+Application services are managed with systemd rather than manually started from an interactive shell. A working directory, configuration path, restart policy, and boot-time startup are defined explicitly.
+
+## Family and Client Access
+
+Internal HTTPS using a private CA requires each client device to trust the CA. This applies to computers and phones.
+
+The CA certificate may be installed on trusted client devices. The CA private key must never be installed on client devices.
+
+For access outside the home network, prefer a VPN or other authenticated private-access layer rather than directly exposing the file-management application to the public internet.
 
 ## Engineering Highlights
 
-- **Proxmox VE** virtualisation
-- Linux Layer-3 routing and bridge networking
-- Dual-subnet segmentation
-- `iptables` NAT and DNAT
-- Stateful traffic-forwarding concepts
-- Reverse proxy architecture
-- TLS termination and IP-SAN certificates
-- Nginx / Nginx Proxy Manager
-- Samba network storage
-- HTTP payload-size troubleshooting
-- Browser-specific TLS troubleshooting
-- Infrastructure troubleshooting and root-cause analysis
-- Configuration-driven infrastructure
-
-## Design Principles
-
-### Explicit Service Exposure
-
-Each externally accessible service receives an explicit port mapping rather than exposing the entire private network.
-
-### Network Separation
-
-```
-<LAN_CIDR>
-        │
-        │ Proxmox routing boundary
-        ▼
-<PRIVATE_SERVICE_CIDR>
-```
-
-### Centralised TLS Termination
-
-```
-Client ── HTTPS ──► Nginx ── HTTP ──► Application
-```
-
-### Reproducibility
-
-Network behaviour is declared through host networking configuration rather than relying exclusively on manually configured runtime state.
+- Proxmox VE virtualisation
+- Layer-3 network segmentation
+- Linux bridge networking
+- IPv4 forwarding
+- Source NAT / masquerading
+- Destination NAT
+- Packet forwarding
+- Nginx reverse proxy
+- TLS/SSL termination
+- Private PKI / internal CA
+- LXC storage mount design
+- Shared storage architecture
+- systemd service management
+- Linux troubleshooting
+- Root-cause analysis
+- Service isolation
+- Security-conscious public documentation
 
 ## Documentation
 
 | Document | Purpose |
 |---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Detailed network and traffic-flow architecture |
-| [RUNBOOKS/TROUBLESHOOTING.md](RUNBOOKS/TROUBLESHOOTING.md) | Troubleshooting cases and RCA records |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Sanitised architecture and traffic-flow design |
+| [RUNBOOKS/TROUBLESHOOTING.md](RUNBOOKS/TROUBLESHOOTING.md) | Troubleshooting cases and RCA methodology |
+| [SECURITY.md](SECURITY.md) | Public-repository security and redaction policy |
 
-## Security / Production Caveats
+## Public Portfolio Principle
 
-> **Important:** This is a home-lab architecture, not a claim of enterprise security compliance.
-
-A hardened production deployment should additionally consider:
-
-- default-deny `FORWARD` policy
-- stateful `ESTABLISHED,RELATED` rules
-- explicit source-address allowlists
-- management-plane isolation
-- firewall logging
-- certificate lifecycle management
-- secrets management
-- monitoring and alerting
-- configuration versioning
-- backup and disaster recovery
-- SSH hardening
-- VLAN segmentation
-
-The value of this lab is demonstrating practical networking, infrastructure troubleshooting, and the ability to evolve an architecture systematically.
-
-## Public-Portfolio Design
-
-The repository intentionally documents the architecture without publishing live home-network identifiers. The configuration examples use placeholders so the project can be shared safely while remaining technically useful to reviewers.
+The repository documents how the infrastructure was designed and engineered, not a blueprint of the live home network. A recruiter can see the relevant technical skills without receiving the real network layout, service addresses, certificate identities, or forwarding rules.
