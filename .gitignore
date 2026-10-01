@@ -13,6 +13,8 @@ secrets.yml
 *.csr
 *.pfx
 *.p12
+certs/
+pki/
 
 # Application state / databases
 *.db
@@ -42,3 +44,7 @@ runtime/
 .terraform/
 terraform.tfstate
 terraform.tfstate.*
+
+# Local/private configuration
+local/
+private/
