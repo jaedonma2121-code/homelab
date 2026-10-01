@@ -1,67 +1,88 @@
-# Security & Privacy
+# Security and Public-Repository Policy
 
-## Public Repository Policy
+This repository is public and therefore treats the live homelab configuration as sensitive infrastructure information.
 
-This repository is designed to be safe to publish as a technical portfolio.
+## Never commit
 
-It intentionally contains **sanitised examples** rather than live deployment state.
+- Real IP addresses
+- Real hostnames or local DNS names
+- Public IP addresses
+- MAC addresses
+- Wi-Fi SSIDs or passwords
+- Home-specific usernames
+- Passwords, hashes, API keys, tokens, cookies, or session data
+- Private Certificate Authority keys
+- Server private keys
+- Unreviewed live certificate bundles
+- Exact DNAT, firewall, or port-forwarding rules
+- Physical disk/device identifiers
+- Container IDs or VM identifiers
+- Application databases
+- Backup archives
+- Raw logs containing sensitive data
+- Unredacted command output from the live infrastructure
 
-### Never commit
+## Safe documentation pattern
 
-- passwords
-- API tokens
-- SSH private keys
-- TLS private keys
-- real certificates
-- `.env` files containing secrets
-- application databases
-- authentication/session state
-- real usernames where they provide unnecessary personal context
-- exact home-network details when they are not required to explain the architecture
-- personal filesystem paths
-- router credentials or management URLs
+Use symbolic placeholders such as <LAN_SUBNET>, <SERVICE_SUBNET>, <HOST_ADDRESS>, <SERVICE_ADDRESS>, <REVERSE_PROXY>, <APPLICATION>, and <APP_PORT>.
 
-### Sanitisation standard
+The purpose is to document architecture and engineering decisions, not publish a live network blueprint.
 
-The repository uses placeholders such as:
+## Private PKI
 
-```text
-<LAN_HOST_IP>
-<LAN_GATEWAY>
-<PRIVATE_SERVICE_IP>
-<STORAGE_PATH>
-<TIMEZONE>
-```
+A CA certificate and a CA private key are not equivalent. The CA private key is secret and must never be published or installed on client devices.
 
-These values are intentionally not the live values used by the lab.
+Server private keys are also secret. Review server certificates before publishing because certificate metadata can reveal hostnames or other identifying information.
 
-## Current Audit
+Keep private PKI material outside Git.
 
-The repository has been reviewed for common accidental-secret patterns including:
+## Storage
 
-- credentials
-- passwords
-- tokens
-- private keys
-- certificate material
-- runtime databases
+Physical storage should be managed by the hypervisor/host where practical. Containers should receive only the directories they need.
 
-No credentials or private cryptographic material are intentionally included.
+Do not publish physical disk serial numbers, filesystem UUIDs, identifying storage labels, or sensitive host mount information.
 
-## Important distinction
+## Remote access
 
-RFC1918 addresses such as `192.168.0.0/16` and `10.0.0.0/8` are not Internet-routable public addresses, but exact home-network details can still reveal information about a private environment.
+Do not make the file-management application publicly reachable merely to enable remote family access.
 
-For that reason, portfolio documentation should prefer **documentation-only addresses and placeholders**.
+Prefer:
 
-## Reporting
+1. VPN/private overlay network
+2. Authenticated access
+3. HTTPS
+4. Least-privilege application accounts
+5. No direct exposure of backend application ports
 
-If a sensitive value is ever committed:
+## Pre-commit review
+
+Search for private-network indicators such as private IPv4 ranges and .local names. These are not automatically secrets, but they should trigger manual review.
+
+Also search for:
+
+~~~text
+password
+passwd
+secret
+token
+api_key
+private_key
+BEGIN PRIVATE KEY
+BEGIN OPENSSH PRIVATE KEY
+~~~
+
+## Incident response
+
+If a secret or sensitive mapping is accidentally committed:
 
 1. Remove it from the working tree.
-2. Rotate/revoke the affected credential immediately.
-3. Remove it from Git history if it was committed.
-4. Verify repository history and forks/caches.
-5. Replace it with a secret-management mechanism.
+2. Rotate the affected credential or key.
+3. Remove sensitive data from Git history.
+4. Check downstream copies where appropriate.
+5. Review related infrastructure exposure.
 
-> Removing a secret from the latest commit does not invalidate a secret that was already exposed. Rotation is the important control.
+Deleting a secret from the latest commit alone is not sufficient if it remains in Git history.
+
+## Public portfolio objective
+
+The repository should demonstrate architecture, networking, virtualisation, reverse proxying, TLS, storage design, service management, troubleshooting, and security reasoning while withholding information that would help an external party enumerate or target the home environment.
