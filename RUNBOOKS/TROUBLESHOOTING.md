@@ -20,28 +20,44 @@ The architecture was separated into:
 
 Live mappings are deliberately excluded.
 
-## Case 2 — Private TLS and Client Trust
+## Case 2 — Remote Access and TLS Trust
 
-The lab uses a private Certificate Authority rather than a globally trusted public CA. A client device therefore needs to trust the private root certificate.
+The lab evolved from LAN-only private-CA access to an authenticated overlay network combined with publicly trusted HTTPS.
+
+The responsibilities are separated:
 
 ~~~text
-Private Root CA
-      |
-      v
-Internal server certificate
-      |
-      v
+Remote client
+     |
+     | authenticated overlay network
+     v
 Nginx
-      |
-      v
-Web application
+     |
+     | HTTPS / TLS termination
+     v
+Internal application
 ~~~
 
-The CA private key must never be installed on clients or committed to Git.
+The overlay network controls who can reach the private ingress point. TLS provides application-layer confidentiality and standard client trust.
 
-Phones and tablets can use the service, but private-CA trust remains device-specific.
+The public repository documents this architecture without publishing the real domain, overlay addresses, DNS records, certificates, or credentials.
 
-For remote access, use an authenticated VPN/private network rather than exposing the file-management application directly to the internet.
+## Case 2A — DNS Validation for Public TLS
+
+A wildcard certificate can be issued without exposing the private service network by using DNS-01 validation.
+
+Operational flow:
+
+1. Request certificate for the public service namespace.
+2. ACME server provides a DNS challenge.
+3. DNS challenge is published through the DNS provider's API.
+4. Certificate authority validates the DNS record.
+5. Certificate is issued to the reverse proxy.
+6. Nginx is reloaded after a successful renewal.
+
+DNS API credentials must remain outside Git and should be stored with restrictive permissions. Certificate private keys must also remain outside the repository.
+
+For troubleshooting, verify the challenge publication, certificate validity, renewal configuration, and reverse-proxy reload independently.
 
 ## Case 3 — File Browser Quantum Deployment
 
@@ -212,3 +228,32 @@ Before committing troubleshooting output:
 - [ ] No application databases or backups
 
 > Troubleshoot from the network boundary toward the application, isolate each layer, make the smallest required change, validate the result, and document the engineering lesson without publishing the live environment.
+
+## Case 8 — Overlay DNS and Split-DNS Behaviour
+
+Private service names can resolve differently for approved overlay-network clients than they do through ordinary public DNS.
+
+The intended model is:
+
+~~~text
+Public DNS
+  |
+  +--> public-facing records only
+
+Overlay DNS
+  |
+  +--> private service records
+  |
+  +--> overlay-network addresses
+~~~
+
+When troubleshooting, distinguish between:
+
+- the DNS server queried directly by a diagnostic command
+- the resolver selected by the operating system
+- the resolver used by the application
+- public DNS versus private overlay DNS
+
+A successful application request can therefore coexist with an empty result from a diagnostic tool that queried a different resolver.
+
+Never publish the real private DNS zone, overlay addresses, or device identifiers in troubleshooting output.
