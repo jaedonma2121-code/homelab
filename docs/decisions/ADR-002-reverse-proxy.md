@@ -16,7 +16,7 @@ Client
   |
   | HTTPS
   v
-Nginx Proxy Manager
+Nginx
   |
   | HTTP
   v
