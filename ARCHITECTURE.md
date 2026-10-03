@@ -141,34 +141,36 @@ Application container
 
 This avoids giving the application container direct ownership of the physical block device.
 
-## Private PKI and TLS
+## TLS and Remote Access
+
+The current architecture separates network access from web TLS.
 
 ~~~text
-Private Root CA
+Approved remote client
        |
+       | authenticated overlay network
        v
-Internal server certificate
+Nginx reverse proxy
        |
-       +--> Nginx HTTPS
-       |
-       +--> Internal service hostnames
+       | HTTPS / TLS termination
+       v
+Internal application
 ~~~
 
-The CA private key remains secured and is never committed to Git.
+The reverse proxy uses a publicly trusted certificate so standard clients do not need to install a lab-specific root CA. Certificate issuance is performed through DNS validation.
 
-Client devices that use the private services must trust the CA certificate. This includes computers and mobile devices.
+Private overlay DNS resolves service names to overlay-network addresses for approved clients. Public DNS is not used to publish those private addresses.
+
+Certificate private keys, DNS credentials, live hostnames, and overlay addresses are intentionally excluded from this repository.
 
 ## Remote Access
 
-Internal private service naming is intended for the home network.
+Remote access requires an authenticated private network. The overlay network provides connectivity to the reverse proxy without publishing the private service network or application management interfaces.
 
 ~~~text
 Remote device
      |
-     | authenticated VPN / private network
-     v
-Home network
-     |
+     | authenticated overlay network
      v
 Nginx
      |
@@ -205,7 +207,8 @@ Direct public exposure of the file-management application is intentionally outsi
 - backup verification
 - secrets management
 - automated certificate lifecycle
-- VPN-based remote access
+- authenticated overlay networking
+- private DNS for overlay clients
 
 ## Architecture Principle
 
