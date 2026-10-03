@@ -146,13 +146,23 @@ If multiple services access the same filesystem, they should use the correctly m
 
 Application services are managed with systemd rather than manually started from an interactive shell. A working directory, configuration path, restart policy, and boot-time startup are defined explicitly.
 
-## Family and Client Access
+## Remote Client Access
 
-Internal HTTPS using a private CA requires each client device to trust the CA. This applies to computers and phones.
+Approved computers and mobile devices reach the reverse proxy through an authenticated private-access overlay.
 
-The CA certificate may be installed on trusted client devices. The CA private key must never be installed on client devices.
+The repository documents the access pattern rather than the live implementation details. Private DNS records, overlay addresses, device identifiers, and credentials are deliberately omitted.
 
-For access outside the home network, use an authenticated private-access layer. The repository documents the pattern only; live overlay addresses, DNS records, and credentials are intentionally omitted.
+~~~text
+Approved client
+      |
+      | authenticated overlay
+      v
+Nginx reverse proxy
+      |
+      | HTTPS
+      v
+Internal service
+~~~
 
 ## Engineering Highlights
 
