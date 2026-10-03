@@ -2,7 +2,7 @@
 
 > Proxmox VE / Linux Networking / Reverse Proxy / TLS / Storage / Infrastructure Troubleshooting
 
-A security-conscious home lab demonstrating practical infrastructure engineering with Proxmox VE, Linux routing and NAT, isolated service networking, Nginx, File Browser Quantum, Samba-compatible storage, private PKI, and systemd-managed services.
+A security-conscious home lab demonstrating practical infrastructure engineering with Proxmox VE, Linux routing and NAT, isolated service networking, Nginx, File Browser Quantum, Samba-compatible storage, authenticated overlay networking, publicly trusted TLS, and systemd-managed services.
 
 This repository is intentionally sanitised for public viewing. It documents architecture, engineering decisions, troubleshooting methodology, and operational patterns without publishing live IP addresses, hostnames, usernames, filesystem identifiers, certificate material, or port mappings from the real environment.
 
@@ -44,7 +44,8 @@ The architecture separates upstream connectivity, host-level routing/NAT, privat
 | File Browser Quantum | Web-based file management |
 | Samba | Network file-sharing interface |
 | systemd | Persistent service management |
-| Private CA | Trusted internal TLS for lab services |
+| Authenticated overlay network | Private remote connectivity for approved clients |
+| Publicly trusted TLS | Client-trusted HTTPS at the reverse-proxy boundary |
 | Host-mounted storage | Shared data volume presented to services |
 
 ## Network Design
@@ -95,7 +96,7 @@ Nginx
 Internal application
 ~~~
 
-The lab uses a private Certificate Authority for internal HTTPS. The CA private key must never be stored in this repository or distributed to clients.
+The current web ingress uses a publicly trusted certificate at Nginx, while private remote access is provided through an authenticated overlay network. Earlier internal-only TLS used a private CA; its private key and certificate material remain outside the repository.
 
 ## File Browser Quantum
 
@@ -151,7 +152,7 @@ Internal HTTPS using a private CA requires each client device to trust the CA. T
 
 The CA certificate may be installed on trusted client devices. The CA private key must never be installed on client devices.
 
-For access outside the home network, prefer a VPN or other authenticated private-access layer rather than directly exposing the file-management application to the public internet.
+For access outside the home network, use an authenticated private-access layer. The repository documents the pattern only; live overlay addresses, DNS records, and credentials are intentionally omitted.
 
 ## Engineering Highlights
 
@@ -164,7 +165,9 @@ For access outside the home network, prefer a VPN or other authenticated private
 - Packet forwarding
 - Nginx reverse proxy
 - TLS/SSL termination
-- Private PKI / internal CA
+- Authenticated overlay networking
+- Split-DNS service discovery
+- DNS-validated public TLS
 - LXC storage mount design
 - Shared storage architecture
 - systemd service management
@@ -184,3 +187,23 @@ For access outside the home network, prefer a VPN or other authenticated private
 ## Public Portfolio Principle
 
 The repository documents how the infrastructure was designed and engineered, not a blueprint of the live home network. A recruiter can see the relevant technical skills without receiving the real network layout, service addresses, certificate identities, or forwarding rules.
+
+## Remote Access and Public TLS
+
+The lab now separates remote connectivity from web application ingress:
+
+~~~text
+Approved client
+      |
+      | authenticated overlay network
+      v
+Nginx reverse proxy
+      |
+      | HTTPS / TLS termination
+      v
+Internal application
+~~~
+
+Service hostnames are resolved privately for approved overlay-network clients. Public DNS is not used to publish the private overlay addresses. Certificate issuance uses DNS validation, so no DNS credential or certificate private key belongs in this repository.
+
+The live domain, overlay addresses, DNS credentials, certificate identities, and Nginx virtual-host configuration are intentionally excluded.
