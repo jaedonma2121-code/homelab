@@ -28,7 +28,7 @@ The Proxmox host provides:
 - DNAT
 - controlled service exposure
 
-Nginx Proxy Manager provides the HTTP/TLS application boundary.
+Nginx provides the HTTP/TLS application boundary.
 
 ## Consequences
 
