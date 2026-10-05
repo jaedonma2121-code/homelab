@@ -1,0 +1,23 @@
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:<PINNED_VERSION>
+    container_name: open-webui
+    restart: unless-stopped
+
+    ports:
+      - "<BIND_ADDRESS>:<WEBUI_PORT>:8080"
+
+    environment:
+      OLLAMA_BASE_URL: "http://<OLLAMA_ENDPOINT>:<OLLAMA_PORT>"
+      WEBUI_URL: "https://<AI_HOSTNAME>"
+      CORS_ALLOW_ORIGIN: "https://<AI_HOSTNAME>"
+
+    volumes:
+      - open-webui:/app/backend/data
+
+volumes:
+  open-webui:
+
+# Ollama runs on the host/VM and owns GPU access.
+# Do not publish the Ollama API directly to the internet.
+# Keep production hostnames, addresses, credentials, and tokens outside Git.
