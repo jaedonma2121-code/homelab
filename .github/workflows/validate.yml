@@ -11,7 +11,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Validate JSON examples
         run: |
@@ -28,8 +28,27 @@ jobs:
 
       - name: Check required portfolio files
         run: |
-          test -f README.md
-          test -f ARCHITECTURE.md
-          test -f SECURITY.md
-          test -f RUNBOOKS/TROUBLESHOOTING.md
-          test -f diagrams/network-topology.mmd
+          set -euo pipefail
+
+          required_files=(
+            "README.md"
+            "ARCHITECTURE.md"
+            "SECURITY.md"
+            "RUNBOOKS/TROUBLESHOOTING.md"
+            "diagrams/mermaid-diagram.png"
+            "docs/README.md"
+            "docs/decisions/ADR-001-network-segmentation.md"
+            "docs/decisions/ADR-002-reverse-proxy.md"
+            "docs/decisions/ADR-003-private-remote-access-and-public-tls.md"
+            "docs/decisions/ADR-004-ai-inference.md"
+            "services/ai/README.md"
+            "services/ai/docker-compose.example.yml"
+          )
+
+          for file in "${required_files[@]}"; do
+            test -f "$file" || {
+              echo "::error::Missing required portfolio file: $file"
+              exit 1
+            }
+            echo "found: $file"
+          done
