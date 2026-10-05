@@ -9,5 +9,6 @@ Architecture Decision Records (ADRs) capture the reasoning behind important desi
 - [ADR-001 — Network Segmentation](decisions/ADR-001-network-segmentation.md)
 - [ADR-002 — Reverse Proxy](decisions/ADR-002-reverse-proxy.md)
 - [ADR-003 — Private Remote Access and Public TLS](decisions/ADR-003-private-remote-access-and-public-tls.md)
+- [ADR-004 — GPU-Backed AI Inference](decisions/ADR-004-ai-inference.md)
 
 ADRs are intentionally concise: they record the context, decision, consequences, and future direction rather than duplicating the main architecture document.
