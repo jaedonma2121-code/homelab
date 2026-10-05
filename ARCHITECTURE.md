@@ -19,6 +19,14 @@ Private service network
      +----> Nginx reverse proxy
      |          |
      |          +----> File Browser Quantum
+     |          |
+     |          +----> Open WebUI
+     |                     |
+     |                     v
+     |                   Ollama
+     |                     |
+     |                     v
+     |                NVIDIA GPU
      |
      +----> Storage services
                 |
@@ -97,11 +105,56 @@ Nginx
   |
   | TLS termination
   | HTTP reverse proxy
-  v
-Internal application
+  +----------------------+------------------+
+  |                      |                  |
+  v                      v                  v
+File Browser          Open WebUI        Other web apps
+                          |
+                          | internal API
+                          v
+                       Ollama
+                          |
+                          v
+                      GPU runtime
 ~~~
 
 Only the reverse-proxy layer is intended to be the normal web ingress point.
+
+## AI Inference Architecture
+
+The AI workload uses a dedicated virtual machine with GPU passthrough.
+
+~~~text
+Proxmox VE
+    |
+    | PCIe passthrough
+    v
+AI virtual machine
+    |
+    +----> Open WebUI
+    |          |
+    |          v
+    |       Ollama
+    |          |
+    |          v
+    |      NVIDIA GPU
+    |
+    +----> persistent application data
+~~~
+
+The design separates:
+
+| Layer | Responsibility |
+|---|---|
+| Reverse proxy | HTTPS ingress and request routing |
+| Open WebUI | User interface, sessions, and application workflows |
+| Ollama | Model serving and inference API |
+| NVIDIA GPU | Hardware acceleration |
+| Proxmox | Virtualisation and device passthrough |
+
+This avoids coupling the browser-facing application to the GPU runtime and provides a clear boundary for troubleshooting.
+
+The repository does not publish the VM identifier, GPU PCI identifiers, internal addresses, model inventory, or live Docker configuration.
 
 ## File Browser Quantum
 
@@ -178,19 +231,21 @@ Nginx
 Internal service
 ~~~
 
-Direct public exposure of the file-management application is intentionally outside this architecture.
+Direct public exposure of backend application ports is intentionally outside this architecture.
 
 ## Failure Domains
 
 | Layer | Example failure |
 |---|---|
 | Physical/network | Upstream connectivity unavailable |
-| Proxmox | Bridge or routing configuration failure |
+| Proxmox | Bridge, routing, or passthrough configuration failure |
 | NAT | Incorrect translation |
 | Forwarding | Packet filtering/forwarding failure |
 | Nginx | Listener or virtual-host configuration failure |
 | TLS | Certificate, trust, or SNI mismatch |
-| Application | File Browser unavailable |
+| Application | Open WebUI or File Browser unavailable |
+| Inference | Ollama unavailable or model load failure |
+| GPU | Passthrough, driver, or runtime failure |
 | Storage | Host mount unavailable |
 | Authentication | Invalid credentials or policy |
 
@@ -209,6 +264,8 @@ Direct public exposure of the file-management application is intentionally outsi
 - automated certificate lifecycle
 - authenticated overlay networking
 - private DNS for overlay clients
+- GPU workload monitoring
+- resource quotas for AI workloads
 
 ## Architecture Principle
 
