@@ -1,8 +1,8 @@
 # Home Lab Infrastructure
 
-> Proxmox VE / Linux Networking / Reverse Proxy / TLS / Storage / Infrastructure Troubleshooting
+> Proxmox VE / Linux Networking / Reverse Proxy / TLS / AI Inference / Storage / Infrastructure Troubleshooting
 
-A security-conscious home lab demonstrating practical infrastructure engineering with Proxmox VE, Linux routing and NAT, isolated service networking, Nginx, File Browser Quantum, Samba-compatible storage, authenticated overlay networking, publicly trusted TLS, and systemd-managed services.
+A security-conscious home lab demonstrating practical infrastructure engineering with Proxmox VE, Linux routing and NAT, isolated service networking, Nginx, self-hosted AI inference, File Browser Quantum, Samba-compatible storage, authenticated overlay networking, publicly trusted TLS, and systemd-managed services.
 
 This repository is intentionally sanitised for public viewing. It documents architecture, engineering decisions, troubleshooting methodology, and operational patterns without publishing live IP addresses, hostnames, usernames, filesystem identifiers, certificate material, or port mappings from the real environment.
 
@@ -10,14 +10,14 @@ This repository is intentionally sanitised for public viewing. It documents arch
 
 Never commit real LAN or private-subnet addresses, real DNS names, public IPs, MAC addresses, Wi-Fi credentials, passwords, tokens, private keys, live certificates, physical disk identifiers, exact DNAT/port mappings, raw production configuration, databases, backups, or unredacted logs.
 
-Examples use symbolic values such as <LAN_SUBNET>, <SERVICE_SUBNET>, <HOST_ADDRESS>, and <SERVICE_ADDRESS>.
+Examples use symbolic values such as <LAN_SUBNET>, <SERVICE_SUBNET>, <HOST_ADDRESS>, <SERVICE_ADDRESS>, and <AI_ENDPOINT>.
 
 ## Architecture Overview
 
 ~~~text
 Home LAN
    |
-   | HTTPS
+   | controlled connectivity
    v
 Proxmox VE
    |
@@ -25,13 +25,21 @@ Proxmox VE
    +----> Nginx reverse proxy
    |           |
    |           +----> File Browser Quantum
+   |           |
+   |           +----> Open WebUI
+   |                         |
+   |                         v
+   |                      Ollama
+   |                         |
+   |                         v
+   |                    NVIDIA GPU
    |
    +----> storage services
               |
               +----> host-mounted data
 ~~~
 
-The architecture separates upstream connectivity, host-level routing/NAT, private services, application ingress, and persistent storage.
+The architecture separates upstream connectivity, host-level routing/NAT, private services, application ingress, AI inference, and persistent storage.
 
 ## Core Components
 
@@ -41,6 +49,9 @@ The architecture separates upstream connectivity, host-level routing/NAT, privat
 | Linux bridge | Private service-network connectivity |
 | iptables | NAT, DNAT, and packet forwarding |
 | Nginx | HTTP reverse proxy and TLS termination |
+| Open WebUI | Web interface for self-hosted AI inference |
+| Ollama | Local LLM inference runtime |
+| NVIDIA GPU passthrough | Dedicated hardware acceleration for AI workloads |
 | File Browser Quantum | Web-based file management |
 | Samba | Network file-sharing interface |
 | systemd | Persistent service management |
@@ -72,8 +83,6 @@ Proxmox routing stack
    |
    +--> selective DNAT --> reverse proxy
    |
-   +--> selective DNAT --> approved service
-   |
    +--> private-network egress --> upstream NAT
 ~~~
 
@@ -92,11 +101,61 @@ Nginx
   |
   | TLS termination
   | HTTP reverse proxy
-  v
-Internal application
+  +--------------------+-------------------+
+  |                    |                   |
+  v                    v                   v
+File Browser        Open WebUI        Other services
+                         |
+                         | internal HTTP
+                         v
+                      Ollama
+                         |
+                         v
+                     GPU runtime
 ~~~
 
-The current web ingress uses a publicly trusted certificate at Nginx, while private remote access is provided through an authenticated overlay network. Earlier internal-only TLS used a private CA; its private key and certificate material remain outside the repository.
+The reverse proxy owns client-facing TLS while application backends remain on the private service network.
+
+## Self-Hosted AI Service
+
+The lab includes a dedicated AI workload for local LLM inference.
+
+~~~text
+Approved client
+      |
+      | authenticated overlay
+      v
+Nginx reverse proxy
+      |
+      | HTTPS / TLS termination
+      v
+Open WebUI
+      |
+      | internal API
+      v
+Ollama
+      |
+      | GPU acceleration
+      v
+NVIDIA GPU
+~~~
+
+The AI service separates the user-facing application from the inference runtime. Open WebUI provides the browser interface and session/authentication layer, while Ollama manages model execution. GPU passthrough allows the virtualised workload to use dedicated NVIDIA hardware without exposing the GPU directly to other services.
+
+The public repository documents the workload pattern, not the live endpoint, VM identifier, GPU identifiers, model inventory, or network mappings.
+
+### AI engineering highlights
+
+- Virtualised AI workload on Proxmox
+- PCIe GPU passthrough
+- NVIDIA GPU acceleration
+- Ollama inference runtime
+- Open WebUI application layer
+- Reverse-proxy ingress
+- TLS termination
+- Private backend networking
+- Separation of application and inference responsibilities
+- Persistent application data through Docker volumes
 
 ## File Browser Quantum
 
@@ -144,7 +203,7 @@ If multiple services access the same filesystem, they should use the correctly m
 
 ## Service Management
 
-Application services are managed with systemd rather than manually started from an interactive shell. A working directory, configuration path, restart policy, and boot-time startup are defined explicitly.
+Application services are managed with systemd or Docker depending on workload requirements. Long-running services define explicit startup behaviour, restart policy, configuration, and persistent storage.
 
 ## Remote Client Access
 
@@ -178,6 +237,12 @@ Internal service
 - Authenticated overlay networking
 - Split-DNS service discovery
 - DNS-validated public TLS
+- PCIe GPU passthrough
+- NVIDIA GPU acceleration
+- Local LLM inference
+- Ollama
+- Open WebUI
+- Docker containerisation
 - LXC storage mount design
 - Shared storage architecture
 - systemd service management
@@ -193,6 +258,8 @@ Internal service
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Sanitised architecture and traffic-flow design |
 | [RUNBOOKS/TROUBLESHOOTING.md](RUNBOOKS/TROUBLESHOOTING.md) | Troubleshooting cases and RCA methodology |
 | [SECURITY.md](SECURITY.md) | Public-repository security and redaction policy |
+| [services/ai/README.md](services/ai/README.md) | Sanitised AI service architecture and deployment pattern |
+| [docs/decisions/ADR-004-ai-inference.md](docs/decisions/ADR-004-ai-inference.md) | Decision record for virtualised GPU-backed AI inference |
 
 ## Public Portfolio Principle
 
@@ -200,7 +267,7 @@ The repository documents how the infrastructure was designed and engineered, not
 
 ## Remote Access and Public TLS
 
-The lab now separates remote connectivity from web application ingress:
+The lab separates remote connectivity from web application ingress:
 
 ~~~text
 Approved client
