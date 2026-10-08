@@ -35,8 +35,14 @@ Proxmox VE
    |                    NVIDIA GPU
    |
    +----> storage services
+   |           |
+   |           +----> host-mounted data
+   |
+   +----> Minecraft Java server
+              ^
               |
-              +----> host-mounted data
+       authenticated overlay
+       + controlled routing
 ~~~
 
 The architecture separates upstream connectivity, host-level routing/NAT, private services, application ingress, AI inference, and persistent storage.
@@ -56,6 +62,9 @@ The architecture separates upstream connectivity, host-level routing/NAT, privat
 | Samba | Network file-sharing interface |
 | systemd | Persistent service management |
 | Authenticated overlay network | Private remote connectivity for approved clients |
+| Network routing layer | Controlled forwarding to approved non-HTTP services |
+| Minecraft Java Server | Dedicated game-server workload |
+| tmux | Persistent interactive Minecraft console |
 | Publicly trusted TLS | Client-trusted HTTPS at the reverse-proxy boundary |
 | Host-mounted storage | Shared data volume presented to services |
 
@@ -201,6 +210,31 @@ File Browser / Samba
 
 If multiple services access the same filesystem, they should use the correctly mounted filesystem path rather than independently mounting the physical device.
 
+## Minecraft Server
+
+The lab includes a dedicated Minecraft Java Edition service on the private service network. Remote clients reach it through the authenticated overlay and controlled routing layer rather than through public router port-forwarding.
+
+~~~text
+Approved remote client
+        |
+        | authenticated overlay
+        v
+Existing routing peer
+        |
+        | controlled forwarding
+        v
+Minecraft Java server
+        |
+        v
+tmux-backed service console
+~~~
+
+Minecraft is intentionally kept outside the HTTP reverse-proxy path because the game server uses its own protocol rather than HTTP/HTTPS. The server is managed by systemd and uses tmux to provide a persistent interactive console without requiring RCON or a web administration panel.
+
+The public repository omits live addresses, hostnames, container IDs, routing entries, overlay addresses, client identifiers, and network policy details.
+
+See [services/minecraft/README.md](services/minecraft/README.md) for the sanitised service architecture.
+
 ## Service Management
 
 Application services are managed with systemd or Docker depending on workload requirements. Long-running services define explicit startup behaviour, restart policy, configuration, and persistent storage.
@@ -249,6 +283,8 @@ Internal service
 - Linux troubleshooting
 - Root-cause analysis
 - Service isolation
+- Dedicated Minecraft Java hosting
+- tmux-based interactive service administration
 - Security-conscious public documentation
 
 ## Documentation
