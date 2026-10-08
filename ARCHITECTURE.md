@@ -29,8 +29,14 @@ Private service network
      |                NVIDIA GPU
      |
      +----> Storage services
+     |          |
+     |          +----> host-mounted data
+     |
+     +----> Minecraft Java server
+                ^
                 |
-                +----> host-mounted data
+        authenticated overlay
+        + controlled routing
 ~~~
 
 ## Network Segmentation
@@ -156,6 +162,34 @@ This avoids coupling the browser-facing application to the GPU runtime and provi
 
 The repository does not publish the VM identifier, GPU PCI identifiers, internal addresses, model inventory, or live Docker configuration.
 
+## Minecraft Service
+
+Minecraft Java is hosted as a dedicated private-network workload. It does not use the HTTP reverse proxy because its traffic is not HTTP/HTTPS.
+
+~~~text
+Approved remote client
+        |
+        | authenticated overlay network
+        v
+Existing routing peer
+        |
+        | controlled forwarding
+        v
+Minecraft Java server
+        |
+        v
+systemd service
+        |
+        v
+tmux interactive console
+~~~
+
+The routing layer provides controlled access from approved overlay clients to the private Minecraft service. No public router port-forwarding is required.
+
+The service is managed by systemd for lifecycle and boot behaviour. tmux provides a persistent interactive console so administrators can attach, issue Minecraft commands, detach, and leave the server running without RCON or a web administration panel.
+
+The repository deliberately omits live addresses, hostnames, container identifiers, routing entries, overlay addresses, client identifiers, firewall rules, and policy details.
+
 ## File Browser Quantum
 
 File Browser Quantum runs inside a private LXC.
@@ -248,6 +282,7 @@ Direct public exposure of backend application ports is intentionally outside thi
 | GPU | Passthrough, driver, or runtime failure |
 | Storage | Host mount unavailable |
 | Authentication | Invalid credentials or policy |
+| Game service | Minecraft process, JVM, or tmux service failure |
 
 ## Hardening Roadmap
 
@@ -264,6 +299,7 @@ Direct public exposure of backend application ports is intentionally outside thi
 - automated certificate lifecycle
 - authenticated overlay networking
 - private DNS for overlay clients
+- policy-controlled game-service routing
 - GPU workload monitoring
 - resource quotas for AI workloads
 
